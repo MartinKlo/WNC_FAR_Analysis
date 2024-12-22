@@ -1,0 +1,252 @@
+---
+title: "Stat-442 Final Project Data Processing"
+author: "Martin Kloster"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+```{r Libraries}
+library(tidyverse)
+library(readr)
+```
+
+## Including Plots
+
+Loading in the ACS and FAR datasets.
+
+```{r Reading_Data, echo=FALSE}
+# Clear Global Environment
+rm(list = ls())
+
+# =============== Read FAR Data ===============
+FAR2000RAW <- read.csv("./FAR Data/FARcodesZIPdata2000.csv", sep=",", header = TRUE)
+FAR2010RAW <- read.csv("./FAR Data/FARcodesZIPdata2010.csv", sep=",", colClasses = c(ZIP = "character"), header = TRUE)
+
+# =============== Read ACS Data ===============
+# S0101 - Age and Sex
+S0101_2023_Raw <- read.csv("./ACS Data/Zip 5y/S0101 - Age and Sex/ACSST5Y2023.S0101-Data.csv")
+
+# S0701 - Geographic Mobility
+S0701_2023_Raw <- read.csv("./ACS Data/Zip 5y/S0701 - Geographic Mobility/ACSST5Y2023.S0701-Data.csv")
+
+# S1401 - School Enrollment
+S1401_2023_Raw <- read.csv("./ACS Data/Zip 5y/S1401 - School Enrollment/ACSST5Y2023.S1401-Data.csv")
+
+# S1501 - Educational Attainment
+S1501_2023_Raw <- read.csv("./ACS Data/Zip 5y/S1501 - Educational Attainment/ACSST5Y2023.S1501-Data.csv")
+
+# S1701 - Poverty Status (Last 12 Months)
+S1701_2023_Raw <- read.csv("./ACS Data/Zip 5y/S1701 - Poverty Status (Last 12)/ACSST5Y2023.S1701-Data.csv")
+
+# =============== Read Covid Data ===============
+Covid <- read.csv("./CDC Covid Data/United_States_COVID-19_Community_Levels_by_County.csv")
+
+# =============== Read FIPS/ZIP/County Crosswalk ===============
+Crosswalk <- read.csv("./FIPS-ZIP Crosswalk/ZIP-COUNTY-FIPS_2017-06.csv")
+```
+
+
+```{r Cleaning_FAR}
+# List of State Abbreviations for West North Central
+WNC_States <- c("IA","KS","MN","MO","NE","ND","SD")
+
+# Filter FAR to West North Central
+WNC_FAR_2000_RAW <- FAR2000RAW %>% filter(state %in% WNC_States)
+WNC_FAR_2010_RAW <- FAR2010RAW %>% filter(state %in% WNC_States)
+
+# Filter to desired Columns
+FAR2000 <- WNC_FAR_2000_RAW[,c(1:9)]
+FAR2010 <- WNC_FAR_2010_RAW[,c(1:7,9)]
+
+# Create Max FAR
+FAR2010 <- FAR2010 %>% mutate(Max.FAR = far1 + far2 + far3 + far4)
+```
+
+```{r Cleaning_ACS}
+# =============== Create Cleaning Lists ===============
+# Column Restrictions
+S0101_ColRestrict <- c(2,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71,73)
+S0701_ColRestrict <- c(2,3,115,227,339,451)
+S1401_ColRestrict <- c(2,3,5,7,9,11,13,15,17,19)
+S1501_ColRestrict <- c(2,3,5,7,9,11,13,15,17,19,21,23,25,27)
+S1701_ColRestrict <- c(2,127)
+
+# Column Names
+S0101_ColNames <- c("ZIP","Total.Pop","Age.Under-5","Age.5-9","Age.10-14","Age.15-19","Age.20-24","Age.25-29","Age.30-34","Age.35-39","Age.40-44","Age.45-49","Age.50-54","Age.55-59","Age.60-64","Age.65-69","Age.70-74","Age.75-79","Age.80-84","Age.85-Over","Age.Categories.5-14","Age.Categories.15-17","Age.Categories.Under-18","Age.Categories.18-24","Age.Categories.15-24","Age.Categories.16-Over","Age.Categories.18-Over","Age.Categories.21-over","Age.Categories.60-Over","Age.Categories.62-Over","Age.Categories.65-Over","Age.Categories.75-Older","Summary.Median_Age","Summary.Sex_Ratio","Summary.Age_Dependency_Ratio","Summary.Old_Age_Dependency_Ratio","Summary.Child_Dependency_Ratio")
+S0701_ColNames <- c("ZIP","Moved.Total_Pop","Moved.Same_County","Moved.Different_County.Intrastate","Moved.Interstate","Moved.International")
+S1401_ColNames <- c("ZIP","Enrollment.Total_Pop","Enrollment.Nursery-Preschool","Enrollment.Total.Pop.K12","Enrollment.Kindergarten","Enrollment.Elementary.1-4","Enrollment.Elementary.5-8","Enrollment.High_School.9-12","Enrollment.College.Undergrad","Enrollment.Graduate-Professional")
+S1501_ColNames <- c("ZIP","EdAttain.Total_Pop.18-24","EdAttain.Less_than_HS.18-24","EdAttain.HS_or_Equivalent.18-24","EdAttain.Some_College_or_Associate_Degree.18-24","EdAttain.Bachelors_or_Higher.18-24","EdAttain.Total_Pop_25-Older","EdAttain.Under-9th.25-Older","EdAttain.No_Diploma_9th-12th","EdAttain.HS_or_Equivalent.25-Older","EdAttain.Some_College-Associates.25-Older","EdAttain.Associates_Degree.25-Older","EdAttain.Bachelors.25-Older","EdAttain.Graduate-Professional_Degree.25-Older")
+S1701_ColNames <- c("ZIP","Below.Poverty.Count")
+
+# =============== Change Colnames in Datasets ===============
+# S0101 - Age and Sex
+S0101 <- S0101_2023_Raw[-1,S0101_ColRestrict]
+colnames(S0101) <- S0101_ColNames
+
+# S0701 - Geographic Mobility
+S0701 <- S0701_2023_Raw[-1,S0701_ColRestrict]
+colnames(S0701) <- S0701_ColNames
+
+# S1401 - School Enrollment
+S1401 <- S1401_2023_Raw[-1,S1401_ColRestrict]
+colnames(S1401) <- S1401_ColNames
+
+# S1501 - Educational Attainment
+S1501 <- S1501_2023_Raw[-1,S1501_ColRestrict]
+colnames(S1501) <- S1501_ColNames
+
+# S1701 - Poverty Status (Last 12 Months)
+S1701 <- S1701_2023_Raw[-1,S1701_ColRestrict]
+colnames(S1701) <- S1701_ColNames
+```
+
+```{r Merging_Data}
+# =============== Merge Data Sets into Central Database ===============
+# ACS Data Merging
+ACS_Data <- merge(S0101, S0701, by = "ZIP", all = TRUE)
+ACS_Data <- merge(ACS_Data, S1401, by = "ZIP", all = TRUE)
+ACS_Data <- merge(ACS_Data, S1501, by = "ZIP", all = TRUE)
+ACS_Data <- merge(ACS_Data, S1701, by = "ZIP", all = TRUE)
+
+# ZIP Formatting
+ACS_Data <- ACS_Data %>% mutate(ZIP=str_extract(ZIP, "[^ ]+$"))
+
+# Merge ACS Data and FAR Data
+CentralData <- merge(FAR2010, ACS_Data, by = "ZIP", all = FALSE)
+
+# =============== Coerce Columns to correct data types ===============
+CentralData <- CentralData %>% mutate_at(vars(c(8,10:73)), as.numeric) %>% mutate_at(vars(9), as.factor)
+
+# =============== Create Variables ===============
+# Poverty Rate, Population Density
+CentralData <- CentralData %>% mutate(Poverty.Rate = Below.Poverty.Count / Total.Pop, Population.Density = Total.Pop / sqmi, HS_Degree.Rate = rowSums(across(c(62:64,68:72))) / rowSums(across(35)), College_Degree.Rate = rowSums(across(c(64,71,72))) / rowSums(across(35)))
+```
+
+```{r FAR_Graphing}
+# FAR Summary Dataset
+FAR2010_Summaries <- data.frame(
+  Name = c("FAR 0", "FAR 1","FAR 2","FAR 3","FAR 4"),
+  Value = c(1-mean(FAR2010$far1), mean(FAR2010$far1), mean(FAR2010$far2), mean(FAR2010$far3), mean(FAR2010$far4))
+  )
+
+# Plot Creation
+FAR_Distribution <- ggplot(FAR2010_Summaries, aes(x=Name, y=Value, fill=Name)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Percentage of Zip Codes at Each FAR Level")
+
+# FAR Max Summary
+FAR_Counts <- FAR2010 %>% count(Max.FAR)
+FAR2010_Summaries$Counts <- FAR_Counts[,2]
+
+# Max Distribution Plotting
+FAR_Max_Distribution <- ggplot(FAR2010_Summaries, aes(x=Name, y=Counts, fill=Name)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Count of Maximum FAR Level (Zip)")
+```
+
+```{r CentralData_Graphing}
+# Violin Charts of Age, X = Max FAR
+#ggplot(CentralData, aes(x=Max.FAR, y=median, color=Max.FAR)) + 
+#    geom_violin(width = 1) +
+#    geom_boxplot(width = .1) +
+#    ggtitle("Violen Chart of Ages by Max FAR Levels") +
+#    xlab("Max FAR Level") +
+#    ylab("Age")
+
+#ggplot(CentralData, aes(x=,y=))
+
+# Poverty distribution
+FAR.Poverty_Rate <- ggplot(CentralData, aes(x = Poverty.Rate)) +
+  geom_area(stat = "bin",fill = "#69b3a2", alpha=0.4) +
+  facet_wrap(~Max.FAR)
+
+# Median Age Distribution
+FAR.Median_Age <- ggplot(CentralData, aes(x = Summary.Median_Age)) +
+  geom_area(stat = "bin",fill = "#69b3a2", alpha=0.4) + 
+  facet_wrap(~Max.FAR)
+
+# Population Density Distribution
+FAR.Pop_Density <- ggplot(CentralData, aes(x = Population.Density)) +
+  geom_area(stat = "bin",fill = "#69b3a2", alpha=0.4) +
+  facet_wrap(~Max.FAR)
+
+FAR.HS_Degree.Rate <- ggplot(CentralData, aes(x = HS_Degree.Rate)) +
+  geom_area(stat = "bin",fill = "#69b3a2", alpha=0.4) +
+  facet_wrap(~Max.FAR)
+
+FAR.College_Degree.Rate <- ggplot(CentralData, aes(x = College_Degree.Rate)) +
+  geom_area(stat = "bin",fill = "#69b3a2", alpha=0.4) +
+  facet_wrap(~Max.FAR)
+```
+
+```{r Testing}
+# Age Stats
+SummaryStats.Age <- CentralData %>% group_by(Max.FAR) %>% summarize(Median.Age = median(Summary.Median_Age, na.rm=TRUE), Mean.Age = mean(Summary.Median_Age, na.rm=TRUE)) %>% mutate(Age.Skew = Mean.Age - Median.Age)
+
+# Poverty Stats
+SummaryStats.Poverty <- CentralData %>% group_by(Max.FAR) %>% summarize(Median.Poverty.Rate = median(Poverty.Rate, na.rm=TRUE), Mean.Poverty.Rate = mean(Poverty.Rate, na.rm=TRUE)) %>% mutate(Poverty.Skew = Mean.Poverty.Rate - Median.Poverty.Rate)
+
+# HS Degree Rate
+SummaryStats.HS_Degrees <- CentralData %>% group_by(Max.FAR) %>% summarize(Median.HS_Degree.Rate = median(HS_Degree.Rate, na.rm=TRUE), Mean.HS_Degree.Rate = mean(HS_Degree.Rate, na.rm=TRUE)) %>% mutate(Poverty.Skew = Mean.HS_Degree.Rate - Median.HS_Degree.Rate)
+
+# College Degree Rate
+SummaryStats.College_Degrees <- CentralData %>% group_by(Max.FAR) %>% summarize(Median.College_Degree.Rate = median(College_Degree.Rate, na.rm=TRUE), Mean.College_Degree.Rate = mean(College_Degree.Rate, na.rm=TRUE)) %>% mutate(Poverty.Skew = Mean.College_Degree.Rate - Median.College_Degree.Rate)
+
+#ANOVA.Median_Age <- summary(aov(as.character(CentralData$Max.FAR) ~ CentralData$Summary.Median_Age))
+#QQNorm.Median_Age <- qqnorm(CentralData$Summary.Median_Age, pch = 1, frame = FALSE)
+#QQline.Median_Age <- qqline(CentralData$Summary.Median_Age, col = "red", lwd = 2)
+
+summary(aov(as.character(CentralData$Max.FAR) ~ CentralData$Summary.Median_Age))
+qqnorm(CentralData$Summary.Median_Age, pch = 1, frame = FALSE)
+qqline(CentralData$Summary.Median_Age, col = "red", lwd = 2)
+
+# Exponential QQ-Plot - Rates of College Degrees
+#summary(aov(as.character(CentralData$Max.FAR) ~ CentralData$College_Degree.Rate))
+#qqplot(qexp(ppoints(length(CentralData$College_Degree.Rate))), CentralData$College_Degree.Rate)
+#qqline(CentralData$College_Degree.Rate, col = "red", lwd = 2)
+
+# =============== Merge Summaries ===============
+SummaryStats <- merge(SummaryStats.Age, SummaryStats.Poverty, by = "Max.FAR", all = TRUE)
+SummaryStats <- merge(SummaryStats, SummaryStats.HS_Degrees, by = "Max.FAR", all = TRUE)
+SummaryStats <- merge(SummaryStats, SummaryStats.College_Degrees, by = "Max.FAR", all=TRUE)
+```
+
+```{r Summary_Plotting}
+SummaryPlot.Age <- ggplot(SummaryStats, aes(x=Max.FAR, y=Mean.Age, fill = Max.FAR)) +
+  geom_bar(stat = "identity")
+  labs(title = "Average Ages by Max FAR codes")
+
+SummaryPlot.Poverty <- ggplot(SummaryStats, aes(x=Max.FAR, y=Mean.Poverty.Rate, fill = Max.FAR)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Poverty Rates by Max FAR codes")
+
+SummaryPlot.HS_Degree <- ggplot(SummaryStats, aes(x=Max.FAR, y=Mean.HS_Degree.Rate, fill = Max.FAR)) +
+  geom_bar(stat = "identity") +
+  coord_cartesian(ylim = c(.9,.95)) +
+  labs(title = "Average HS Degree Rates by Max FAR codes")
+
+SummaryPlot.College_Degree <- ggplot(SummaryStats, aes(x=Max.FAR, y=Mean.College_Degree.Rate, fill = Max.FAR)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average College Degree Rates by Max FAR codes")
+```
+
+```{r Plot_Display}
+FAR_Distribution
+FAR_Max_Distribution
+
+FAR.HS_Degree.Rate
+FAR.College_Degree.Rate
+
+SummaryPlot.Age
+SummaryPlot.Poverty
+SummaryPlot.HS_Degree
+SummaryPlot.College_Degree
+```
